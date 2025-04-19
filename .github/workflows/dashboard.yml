@@ -1,0 +1,55 @@
+name: Deploy Dashboard
+
+on:
+  workflow_dispatch:  # Manual trigger
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Prepare dashboard directory
+        run: |
+          # Create temp directory
+          mkdir -p temp_dashboard
+          
+          # Copy dashboard HTML file
+          cp .github/dashboard/index.html temp_dashboard/
+          
+          # Copy or create trade history
+          if [ -f "trade_history.json" ]; then
+            cp trade_history.json temp_dashboard/
+          else
+            echo "[]" > temp_dashboard/trade_history.json
+          fi
+      
+      - name: Deploy to gh-pages branch
+        run: |
+          # Clone repository to a new directory
+          cd ..
+          git clone https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git gh-pages
+          cd gh-pages
+          
+          # Create or switch to gh-pages branch
+          git checkout gh-pages || git checkout --orphan gh-pages
+          
+          # Clear existing files (except .git directory)
+          find . -maxdepth 1 ! -path "./.git" ! -path "." -exec rm -rf {} \;
+          
+          # Copy dashboard files
+          cp -r ../github-workspace/temp_dashboard/* .
+          
+          # Add, commit, and push changes
+          git add .
+          git commit -m "Update dashboard" || echo "No changes to commit"
+          git push origin gh-pages || (git push --set-upstream origin gh-pages && echo "First push to gh-pages branch")
